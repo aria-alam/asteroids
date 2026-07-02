@@ -1,58 +1,61 @@
-# Deflection Grid 🌍☄️
+# AstroForge · Prospector 🔭☄️
 
-A planetary-defense strategy game in a single HTML file. You run Earth's
-planetary defense office: asteroids on genuine Kepler-integrated collision
-orbits keep coming, and you have a budget, three flavors of deflection
-mission, and never quite enough lead time.
+A short, calm asteroid-**prospecting** game in a single HTML file. You're a
+mission planner choosing AstroForge's next target from a field of newly
+catalogued near-Earth asteroids. You know how hard each one is to *reach*, but
+not what it's *worth* — that's what your limited telescope and radar time is
+for. Observe wisely, then commit to one target and live with the call.
 
 **Play it:** open `index.html` in any browser. No build, no dependencies.
 
 ## How to play
 
-- Click a threat (on the map or in the sidebar) to open its mission panel.
-- Each weapon shows an **ETA** and an honest **forecast** (STRONG / MARGINAL /
-  WEAK) computed by actually simulating the mission against the asteroid's
-  orbit — plus the predicted miss distance in lunar distances (LD).
-- **Kinetic Impactor ($120M)** — DART-style. Cheap and weak; brilliant with a
-  year of lead time, useless in a panic. 40% less effective against rubble piles.
-- **Gravity Tractor ($220M)** — a continuous femto-tug. Needs the longest lead
-  time of all, but it's gentle: the only option guaranteed safe on rubble piles.
-- **Nuclear Standoff ($480M)** — moves mountains. Unless the mountain is a
-  rubble pile, in which case there's a 45% chance you now have three mountains.
-- Every mission has a failure chance. Space is hard.
-- Deflected asteroids that pass Earth safely earn bounty funding. Impacts cost
-  habitability; at 0% it's game over.
-- `Space` pause · `1` normal speed · `2` fast-forward.
+- Each dot on the chart is a candidate asteroid.
+  - **Horizontal** = mission Δv to reach it (left is cheaper — the accessibility
+    that actually gates a mission).
+  - **Vertical** = estimated recoverable value. The **tall error bars are what
+    you don't know yet.**
+- Click a candidate to open its dossier: orbit, magnitude, and a probability
+  distribution over its spectral type.
+- You have **8 observations per survey**. Spend them to shrink uncertainty:
+  - **Spectrometer** — resolves composition, i.e. the metal *grade*. This is how
+    you spot the rare metallic jackpot.
+  - **Radar / IR** — resolves size, i.e. the *mass*.
+- **Commit** to one target. The truth is revealed and you're graded on how much
+  recoverable value you captured versus the best possible pick in the field.
+- A season is **3 surveys**; your banked value accumulates into a final rank.
 
-## The physics (the fun part)
+The whole game teaches one real lesson: metal-rich (M-type) rocks are rare, and
+a fortune you can't reach cheaply isn't a fortune. Value **and** accessibility
+have to line up — and you're making the call under measurement uncertainty,
+which is exactly what prospecting is.
 
-- Everything moves under real 2-body heliocentric gravity, integrated with
-  velocity-Verlet (`GM☉ = 4π² AU³/yr²`, so Earth orbits at 1 AU in exactly
-  1 year at 2π AU/yr ≈ 29.8 km/s).
-- Threats are spawned by choosing a future Earth-impact state and integrating
-  **backward in time** — so every asteroid is a physically exact impactor
-  until you perturb it. No scripted paths.
-- Deflections are a small Δv applied along-track (the game auto-picks
-  prograde vs retrograde by trial integration, which is how it's really
-  chosen). Kinetic Δv scales as 1/mass, nuclear as 1/mass^⅓, and the
-  tractor is a constant micro-acceleration — the same scalings as the
-  real literature.
-- The core real-world lesson falls straight out of the integrator: the same
-  impactor that produces a 137 LD miss with 9 months of warning produces a
-  1 LD miss — an impact — with 2 months of warning. **Early nudge beats
-  late shove.**
+## The physics (the credible part)
+
+Real relations drive the numbers, not hand-waving:
+
+- **Mission Δv** comes from the Tisserand encounter speed of each orbit:
+  `U = vE · √(3 − 1/a − 2·√(a(1−e²))·cos i)` (a in AU, i in radians). That's the
+  speed at which the asteroid meets Earth; Δv scales with it above an ~3.8 km/s
+  floor to leave LEO and rendezvous.
+- **Size** from the standard absolute-magnitude / albedo relation:
+  `D[km] = 1329 / √p · 10^(−H/5)`.
+- **Mass** from diameter and a taxonomy-based bulk density (metallic ≈ 5300,
+  silicaceous ≈ 2700, carbonaceous ≈ 1400 kg/m³).
+- **Spectral abundances** follow reality: S-types dominate, and the metallic
+  M-types you're hunting are only ~5% of the field.
 
 ### Honest simplifications
 
-- 2D, and Earth's orbit is circular.
-- Earth's collision radius is inflated (~0.012 AU) so you can see it;
-  deflection Δv values are scaled up from reality (DART was mm/s) in
-  proportion, preserving the lead-time trade-off that makes the real
-  problem interesting.
-- Interceptors fly direct intercepts rather than transfer orbits.
-- Timescale: 1 game year ≈ 50 seconds at 1×.
+- Recoverable-value grade (`$/kg` by type) is illustrative — the *ordering*
+  (M ≫ X > Q > S > V > C) is what's real, not the absolute dollars.
+- Orbits are treated as well-determined (Δv is certain); the uncertainty lives
+  in composition and size, which is where real prospecting uncertainty actually
+  concentrates.
+- The accessibility discount `exp(−(Δv−3.8)/2.3)` is a smooth stand-in for a
+  full mission cost model.
 
 ## Development
 
-The whole game is `index.html` (~900 lines, canvas + vanilla JS, WebAudio
-synth for sound — zero assets, zero dependencies).
+The whole game is `index.html` (canvas chart + vanilla JS, zero assets, zero
+dependencies). Physics lives in the clearly commented `physics model` block.
