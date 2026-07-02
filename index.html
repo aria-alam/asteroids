@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deflection Grid — Planetary Defense</title>
+<style>
+  :root{
+    --bg:#05070d; --panel:#0c1220; --panel2:#111a2e; --line:#1d2a45;
+    --text:#d7e1f5; --dim:#7d8db0; --red:#ff5a5a; --amber:#ffb84d;
+    --green:#5dde8f; --blue:#5aa2ff; --violet:#b48aff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; overflow:hidden; background:var(--bg);
+    font-family:'Segoe UI', system-ui, sans-serif; color:var(--text);}
+  #cv{display:block; position:absolute; inset:0;}
+  .hud{position:absolute; user-select:none;}
+
+  #topbar{top:0; left:0; right:320px; display:flex; gap:18px; align-items:center;
+    padding:10px 16px; font-size:13px; background:linear-gradient(#05070dd0,#05070d00);}
+  #topbar .stat{display:flex; flex-direction:column;}
+  #topbar .stat .lab{font-size:10px; letter-spacing:.12em; color:var(--dim); text-transform:uppercase;}
+  #topbar .stat .val{font-size:16px; font-weight:600; font-variant-numeric:tabular-nums;}
+  #healthwrap{width:150px; height:9px; background:#1a2338; border-radius:5px; overflow:hidden; margin-top:4px;}
+  #healthbar{height:100%; width:100%; background:linear-gradient(90deg,#3ecf74,#7be29a); transition:width .4s;}
+  #timectrl{margin-left:auto; display:flex; gap:6px;}
+  .tbtn{background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    padding:5px 12px; border-radius:6px; cursor:pointer; font-size:13px;}
+  .tbtn.active{background:var(--blue); border-color:var(--blue); color:#04101f; font-weight:700;}
+  .tbtn:hover{border-color:var(--blue);}
+
+  #side{top:0; right:0; bottom:0; width:320px; background:linear-gradient(180deg,#0c1220f2,#0a0f1af2);
+    border-left:1px solid var(--line); display:flex; flex-direction:column; padding:14px; gap:12px;}
+  #side h2{font-size:11px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; margin-bottom:6px;}
+
+  #threatlist{flex:0 0 auto; max-height:34%; overflow-y:auto; display:flex; flex-direction:column; gap:5px;}
+  .trow{display:flex; align-items:center; gap:8px; padding:7px 9px; border:1px solid var(--line);
+    border-radius:7px; background:var(--panel2); cursor:pointer; font-size:12px;}
+  .trow:hover{border-color:var(--blue);}
+  .trow.sel{border-color:var(--blue); background:#152649;}
+  .dot{width:9px; height:9px; border-radius:50%; flex:0 0 auto;}
+  .trow .nm{font-weight:600; width:74px;}
+  .trow .tt{color:var(--dim); width:52px;}
+  .trow .eta{margin-left:auto; font-variant-numeric:tabular-nums;}
+  .st-hit{color:var(--red);} .st-def{color:var(--amber);} .st-miss{color:var(--green);}
+
+  #selpanel{flex:1 1 auto; border:1px solid var(--line); border-radius:9px; background:var(--panel2);
+    padding:12px; font-size:13px; overflow-y:auto;}
+  #selpanel .big{font-size:17px; font-weight:700; margin-bottom:2px;}
+  #selpanel .row{display:flex; justify-content:space-between; padding:3px 0; color:var(--dim);}
+  #selpanel .row b{color:var(--text); font-weight:600; font-variant-numeric:tabular-nums;}
+  .wbtn{display:block; width:100%; margin-top:8px; padding:9px 10px; border-radius:8px; text-align:left;
+    background:#0d1526; border:1px solid var(--line); color:var(--text); cursor:pointer; font-size:12.5px;}
+  .wbtn:hover:not(:disabled){border-color:var(--blue); background:#12203c;}
+  .wbtn:disabled{opacity:.38; cursor:not-allowed;}
+  .wbtn .t1{font-weight:700; display:flex; justify-content:space-between;}
+  .wbtn .t2{color:var(--dim); font-size:11px; margin-top:2px;}
+  .eff-STRONG{color:var(--green); font-weight:700;} .eff-MARGINAL{color:var(--amber); font-weight:700;}
+  .eff-WEAK{color:var(--red); font-weight:700;}
+  .warn{color:var(--amber);}
+
+  #log{flex:0 0 118px; overflow-y:auto; font-size:11.5px; display:flex; flex-direction:column-reverse;
+    gap:3px; border-top:1px solid var(--line); padding-top:8px; color:var(--dim);}
+  #log .l-good{color:var(--green);} #log .l-bad{color:var(--red);} #log .l-warn{color:var(--amber);}
+
+  .overlay{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; background:#05070dd8; z-index:10; text-align:center; padding:20px;}
+  .overlay h1{font-size:40px; letter-spacing:.06em; margin-bottom:10px;}
+  .overlay h1 span{color:var(--blue);}
+  .overlay p{max-width:620px; color:var(--dim); line-height:1.55; margin-bottom:10px; font-size:14.5px;}
+  .overlay .key{color:var(--text);}
+  .bigbtn{margin-top:16px; padding:13px 34px; font-size:17px; font-weight:700; border-radius:10px;
+    background:var(--blue); border:none; color:#04101f; cursor:pointer;}
+  .bigbtn:hover{filter:brightness(1.15);}
+  #gameover{display:none;}
+  .scoreline{font-size:19px; color:var(--text); margin:6px 0;}
+  ::-webkit-scrollbar{width:8px;} ::-webkit-scrollbar-thumb{background:#22304f; border-radius:4px;}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div class="hud" id="topbar">
+  <div class="stat"><span class="lab">Budget</span><span class="val" id="uiBudget">$700M</span></div>
+  <div class="stat"><span class="lab">Year</span><span class="val" id="uiYear">2026.0</span></div>
+  <div class="stat"><span class="lab">Deflected</span><span class="val" id="uiSaved">0</span></div>
+  <div class="stat"><span class="lab">Earth habitability</span>
+    <div id="healthwrap"><div id="healthbar"></div></div></div>
+  <div id="timectrl">
+    <button class="tbtn" id="btnPause">⏸ Pause</button>
+    <button class="tbtn active" id="btnPlay">1×</button>
+    <button class="tbtn" id="btnFast">4×</button>
+  </div>
+</div>
+
+<div class="hud" id="side">
+  <div>
+    <h2>Inbound threats</h2>
+    <div id="threatlist"></div>
+  </div>
+  <div id="selpanel"><span style="color:var(--dim)">Click an asteroid to plan a deflection mission.</span></div>
+  <div id="log"></div>
+</div>
+
+<div class="overlay" id="title">
+  <h1>DEFLECTION <span>GRID</span></h1>
+  <p>You run Earth's planetary defense office. Every asteroid here is on a genuine
+     Kepler-integrated collision orbit — and the physics of saving the world is real:
+     <span class="key">a tiny nudge years out beats a huge shove at the last minute.</span></p>
+  <p><span class="key">Kinetic impactors</span> are cheap but weak — fire them early.
+     <span class="key">Gravity tractors</span> are gentle and safe on fragile rubble piles, but need long lead time.
+     <span class="key">Nukes</span> move mountains — unless the mountain is a rubble pile, which may shatter into fragments.</p>
+  <p>Click a threat, check the effectiveness forecast, spend wisely. Space = pause, 1/2 = speed.</p>
+  <button class="bigbtn" id="btnStart">Assume Command</button>
+</div>
+
+<div class="overlay" id="gameover">
+  <h1 style="color:var(--red)">EXTINCTION EVENT</h1>
+  <p id="goText"></p>
+  <div class="scoreline" id="goScore"></div>
+  <button class="bigbtn" id="btnRestart">Try Again</button>
+</div>
+
+<script>
+'use strict';
+/* ================= Deflection Grid =================
+   Physics: 2-body heliocentric gravity, velocity-Verlet integration.
+   Units: AU, years, GM_sun = 4π² (so Earth: a=1 AU, T=1 yr, v=2π AU/yr).
+   Threats are spawned by choosing a future Earth-impact state and
+   integrating BACKWARD in time, so every asteroid is a guaranteed,
+   physically exact impactor until the player perturbs it.
+   Deflection Δv magnitudes are scaled up from reality (DART was mm/s)
+   in proportion to the game's enlarged Earth collision radius, so the
+   core lesson — deflection grows ~linearly with lead time — survives.
+==================================================== */
+
+const MU = 4*Math.PI*Math.PI;      // GM_sun, AU^3/yr^2
+const R_COLLIDE = 0.012;           // gameplay Earth "kill radius", AU
+const LD = 0.00257;                // 1 lunar distance in AU
+const SIM_DT = 5e-4;               // physics step, years
+const PRED_DT = 2e-3;              // prediction step, years
+const PRED_HORIZON = 3.2;          // years to look ahead
+const YEAR_PER_SEC = 0.02;         // 1× speed: 50 real seconds per year
+const EPOCH = 2026.0;
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W=0,H=0,CX=0,CY=0,SCALE=1;
+function resize(){
+  W = cv.width = innerWidth; H = cv.height = innerHeight;
+  CX = (W-320)/2; CY = H/2;
+  SCALE = Math.min(CX, CY)/1.72;
+}
+addEventListener('resize', resize); resize();
+const sx = x => CX + x*SCALE, sy = y => CY + y*SCALE;
+
+/* ---------- audio (tiny synth, no assets) ---------- */
+let AC=null;
+function audioInit(){ if(!AC) AC = new (window.AudioContext||window.webkitAudioContext)(); }
+function beep(f0,f1,dur,type,vol){
+  if(!AC) return;
+  const o=AC.createOscillator(), g=AC.createGain(), t=AC.currentTime;
+  o.type=type||'square'; o.frequency.setValueAtTime(f0,t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(30,f1),t+dur);
+  g.gain.setValueAtTime(vol||.08,t); g.gain.exponentialRampToValueAtTime(1e-4,t+dur);
+  o.connect(g).connect(AC.destination); o.start(t); o.stop(t+dur);
+}
+function boom(){
+  if(!AC) return;
+  const n=AC.sampleRate*.6, buf=AC.createBuffer(1,n,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2.2);
+  const s=AC.createBufferSource(), g=AC.createGain(); s.buffer=buf;
+  g.gain.value=.35; s.connect(g).connect(AC.destination); s.start();
+  beep(120,32,.7,'sine',.3);
+}
+const sfx = {
+  launch: ()=>beep(340,720,.16,'square',.06),
+  select: ()=>beep(520,660,.06,'sine',.05),
+  deflect:()=>{beep(440,880,.13,'sine',.08); setTimeout(()=>beep(660,1320,.15,'sine',.08),90);},
+  fail:   ()=>beep(300,110,.35,'sawtooth',.09),
+  save:   ()=>{beep(523,523,.1,'sine',.07); setTimeout(()=>beep(659,659,.1,'sine',.07),100);
+               setTimeout(()=>beep(784,1046,.2,'sine',.08),200);},
+  impact: boom,
+};
+
+/* ---------- math / physics core ---------- */
+const rand=(a,b)=>a+Math.random()*(b-a);
+function accel(x,y,out){
+  const r2=x*x+y*y+1e-6, r=Math.sqrt(r2), f=-MU/(r2*r);
+  out[0]=f*x; out[1]=f*y;
+}
+const _a=[0,0], _a2=[0,0];
+// One velocity-Verlet step (dt may be negative). extra = [ax,ay] constant thrust.
+function step(s, dt, extra){
+  accel(s.x,s.y,_a);
+  const ax=_a[0]+(extra?extra[0]:0), ay=_a[1]+(extra?extra[1]:0);
+  s.x += s.vx*dt + .5*ax*dt*dt;
+  s.y += s.vy*dt + .5*ay*dt*dt;
+  accel(s.x,s.y,_a2);
+  const ax2=_a2[0]+(extra?extra[0]:0), ay2=_a2[1]+(extra?extra[1]:0);
+  s.vx += .5*(ax+ax2)*dt;
+  s.vy += .5*(ay+ay2)*dt;
+}
+function earthPos(t){ const th=2*Math.PI*t; return [Math.cos(th), Math.sin(th)]; }
+function earthVel(t){ const th=2*Math.PI*t; return [-2*Math.PI*Math.sin(th), 2*Math.PI*Math.cos(th)]; }
+
+/* ---------- game state ---------- */
+let G;
+function newGame(){
+  G = {
+    t: 0, running:false, paused:false, speed:1,
+    budget: 700, health: 100, saved: 0, impacts: 0,
+    asteroids: [], interceptors: [], particles: [],
+    nextSpawn: 0.12, selId: null, over:false, idc: 0,
+    shake: 0,
+  };
+}
+newGame();
+
+const TYPES = {
+  rocky:    {label:'Rocky (S-type)',    color:'#c9a06a', dens:1.0},
+  rubble:   {label:'Rubble pile',       color:'#8f7f9e', dens:0.7},
+  metallic: {label:'Metallic (M-type)', color:'#9fb6c9', dens:2.2},
+};
+function pickType(){ const r=Math.random(); return r<.55?'rocky':r<.85?'rubble':'metallic'; }
+function astName(){
+  const L='ABCDEFGHJKLMNPQRSTUVWXYZ';
+  return `${(EPOCH+G.t|0)} ${L[Math.random()*24|0]}${L[Math.random()*24|0]}${1+Math.random()*9|0}`;
+}
+function massFactor(a){ return Math.pow(a.size/80,3)*TYPES[a.type].dens; }
+
+/* Spawn a guaranteed impactor: pick impact state at T_imp, integrate backward. */
+function spawnAsteroid(){
+  const T=G.t;
+  const warnMin = Math.max(.38, .95 - T*.035);
+  const warnMax = Math.max(.85, 1.75 - T*.05);
+  const sizeMax = Math.min(300, 62 + T*24);
+  for(let tries=0; tries<8; tries++){
+    const warning = rand(warnMin, warnMax);
+    const tImp = T + warning;
+    const [ex,ey] = earthPos(tImp), [evx,evy] = earthVel(tImp);
+    const relSp = rand(1.6, 5.2), ang = rand(0, 2*Math.PI);
+    const s = { x:ex, y:ey, vx:evx+relSp*Math.cos(ang), vy:evy+relSp*Math.sin(ang) };
+    // integrate backward; reject sun-divers
+    let ok=true;
+    const n = Math.round(warning/SIM_DT);
+    for(let i=0;i<n;i++){
+      step(s,-SIM_DT,null);
+      if(s.x*s.x+s.y*s.y < .012){ ok=false; break; }  // r < ~0.11 AU
+    }
+    if(!ok) continue;
+    const a = {
+      id:'a'+(G.idc++), name:astName(), type:pickType(),
+      size: rand(28, sizeMax),
+      x:s.x, y:s.y, vx:s.vx, vy:s.vy,
+      tractorA:0, tractorSign:1, predDirty:true, predTimer:0,
+      pred:null, closestD:0, closestT:0, deflected:false, trail:[],
+    };
+    computePrediction(a);
+    G.asteroids.push(a);
+    log(`New threat detected: <b>${a.name}</b> — ${Math.round(a.size)} m ${TYPES[a.type].label}, impact in ${fmtT(warning)}.`, 'l-warn');
+    return;
+  }
+}
+
+/* Forward-predict an asteroid's path; record points + closest Earth approach. */
+function computePrediction(a){
+  const s={x:a.x, y:a.y, vx:a.vx, vy:a.vy};
+  const extra=[0,0];
+  const pts=[]; let bestD=1e9, bestT=G.t;
+  const nSteps = Math.round(PRED_HORIZON/PRED_DT);
+  for(let i=0;i<nSteps;i++){
+    const t = G.t + i*PRED_DT;
+    if(a.tractorA>0){
+      const sp=Math.hypot(s.vx,s.vy)||1;
+      extra[0]=a.tractorSign*a.tractorA*s.vx/sp;
+      extra[1]=a.tractorSign*a.tractorA*s.vy/sp;
+      step(s,PRED_DT,extra);
+    } else step(s,PRED_DT,null);
+    const [ex,ey]=earthPos(t+PRED_DT);
+    const d=Math.hypot(s.x-ex, s.y-ey);
+    if(d<bestD){ bestD=d; bestT=t+PRED_DT; }
+    if(i%3===0) pts.push(s.x, s.y);
+    if(d<R_COLLIDE*.5) break;   // impact found; no need to look further
+  }
+  a.pred=pts; a.closestD=bestD; a.closestT=bestT; a.predDirty=false; a.predTimer=0;
+}
+
+/* Try both prograde & retrograde push, keep whichever raises miss distance more. */
+function bestKick(a, dv){
+  const trial = sign => {
+    const sp=Math.hypot(a.vx,a.vy)||1;
+    const s={x:a.x, y:a.y, vx:a.vx+sign*dv*a.vx/sp, vy:a.vy+sign*dv*a.vy/sp};
+    let best=1e9;
+    const n=Math.round(Math.min(PRED_HORIZON, a.closestT-G.t+.4)/PRED_DT);
+    for(let i=0;i<n;i++){
+      step(s,PRED_DT,null);
+      const [ex,ey]=earthPos(G.t+(i+1)*PRED_DT);
+      best=Math.min(best, Math.hypot(s.x-ex,s.y-ey));
+    }
+    return best;
+  };
+  return trial(1) >= trial(-1) ? 1 : -1;
+}
+function applyKick(a, dv){
+  const sign = bestKick(a,dv);
+  const sp=Math.hypot(a.vx,a.vy)||1;
+  a.vx += sign*dv*a.vx/sp; a.vy += sign*dv*a.vy/sp;
+  a.deflected=true; a.predDirty=true;
+}
+
+/* ---------- weapons ---------- */
+const WEAPONS = {
+  kinetic:{ name:'Kinetic Impactor', cost:120, speed:10, fail:.12,
+    desc:'DART-style. Cheap, weak — needs lead time.',
+    dv: a => .024/Math.max(.14,massFactor(a)) * (a.type==='rubble'?.6:1) },
+  tractor:{ name:'Gravity Tractor', cost:220, speed:10, fail:.05,
+    desc:'Slow & gentle. Safe on rubble. Needs long lead.',
+    dv: null },
+  nuke:{ name:'Nuclear Standoff', cost:480, speed:10, fail:.08,
+    desc:'Massive Δv. 45% shatter risk on rubble piles!',
+    dv: a => .11/Math.pow(Math.max(.14,massFactor(a)), 1/3) },
+};
+function tractorAccel(a){ return .012/Math.pow(Math.max(.14,massFactor(a)), 2/3); }
+
+/* estimate intercept arrival time using predicted path */
+function interceptETA(a, speed){
+  const [ex,ey]=earthPos(G.t);
+  if(!a.pred) return null;
+  for(let i=0;i<a.pred.length/2;i++){
+    const t = G.t + i*3*PRED_DT;
+    const d = Math.hypot(a.pred[i*2]-ex, a.pred[i*2+1]-ey);
+    if(d/speed <= t-G.t) return t;
+  }
+  return null;
+}
+/* Effectiveness forecast: honestly SIMULATE the mission — propagate the
+   asteroid to intercept, apply the kick (or start the tractor pull), then
+   integrate on to closest approach. Rating reflects the achieved miss. */
+function forecast(a, wkey){
+  const w=WEAPONS[wkey];
+  const tHit = interceptETA(a, w.speed);
+  if(tHit===null || tHit > a.closestT-.02) return {rating:'WEAK', note:'cannot reach in time', tHit:null, miss:0};
+  const missFor = sign => {
+    const s={x:a.x, y:a.y, vx:a.vx, vy:a.vy};
+    const extra=[0,0];
+    let kicked=false, addAcc=0, best=1e9;
+    const n=Math.round(PRED_HORIZON/PRED_DT);
+    for(let i=0;i<n;i++){
+      const t=G.t+i*PRED_DT;
+      if(!kicked && t>=tHit){
+        kicked=true;
+        if(wkey==='tractor') addAcc=tractorAccel(a);
+        else{
+          const sp=Math.hypot(s.vx,s.vy)||1;
+          s.vx+=sign*w.dv(a)*s.vx/sp; s.vy+=sign*w.dv(a)*s.vy/sp;
+        }
+      }
+      const sp=Math.hypot(s.vx,s.vy)||1;
+      const along=(a.tractorSign*a.tractorA + (kicked?sign*addAcc:0))/sp;
+      extra[0]=along*s.vx; extra[1]=along*s.vy;
+      step(s,PRED_DT,extra);
+      const [px,py]=earthPos(t+PRED_DT);
+      const d=Math.hypot(s.x-px,s.y-py);
+      if(d<best) best=d;
+      if(d<R_COLLIDE*.4) return d;
+    }
+    return best;
+  };
+  const miss=Math.max(missFor(1), missFor(-1));
+  const rating = miss > 2*R_COLLIDE ? 'STRONG' : miss > 1.15*R_COLLIDE ? 'MARGINAL' : 'WEAK';
+  return {rating, tHit, miss};
+}
+
+function launch(wkey){
+  const a = getSel(); if(!a || G.over) return;
+  const w = WEAPONS[wkey];
+  if(G.budget < w.cost) { log('Insufficient budget.', 'l-bad'); return; }
+  const [ex,ey]=earthPos(G.t);
+  G.budget -= w.cost;
+  G.interceptors.push({ x:ex, y:ey, type:wkey, targetId:a.id, speed:w.speed });
+  sfx.launch();
+  log(`${w.name} launched at <b>${a.name}</b> ($${w.cost}M).`);
+  updateSelPanel();
+}
+
+/* ---------- particles / fx ---------- */
+function burst(x,y,color,n,sp){
+  for(let i=0;i<n;i++){
+    const a=rand(0,2*Math.PI), v=rand(.2,1)*sp;
+    G.particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:1,color});
+  }
+}
+
+/* ---------- events during sim ---------- */
+function resolveInterceptorArrival(it, a){
+  const w=WEAPONS[it.type];
+  if(Math.random() < w.fail){
+    sfx.fail(); burst(a.x,a.y,'#666',10,.15);
+    log(`<b>${w.name}</b> MISSION FAILED at ${a.name} — spacecraft lost.`, 'l-bad');
+    return;
+  }
+  if(it.type==='tractor'){
+    a.tractorSign = bestKick(a, .002);
+    a.tractorA += tractorAccel(a);
+    a.deflected=true; a.predDirty=true;
+    log(`Gravity tractor on station at <b>${a.name}</b> — slow pull engaged.`, 'l-good');
+    sfx.deflect();
+  } else if(it.type==='nuke' && a.type==='rubble' && Math.random()<.45){
+    shatter(a);
+  } else {
+    applyKick(a, w.dv(a));
+    burst(a.x,a.y,'#ffd27a',18,.3);
+    sfx.deflect();
+    log(`${w.name} hit <b>${a.name}</b> — trajectory altered.`, 'l-good');
+  }
+}
+function shatter(parent){
+  sfx.fail(); burst(parent.x,parent.y,'#b48aff',26,.4);
+  const n = 2+(Math.random()*2|0);
+  removeAst(parent.id);
+  for(let i=0;i<n;i++){
+    const f = {
+      id:'a'+(G.idc++), name:parent.name+'-'+String.fromCharCode(66+i),
+      type:'rocky', size:parent.size*rand(.42,.62),
+      x:parent.x, y:parent.y,
+      vx:parent.vx+rand(-.022,.022), vy:parent.vy+rand(-.022,.022),
+      tractorA:0, tractorSign:1, predDirty:true, predTimer:0,
+      pred:null, closestD:0, closestT:0, deflected:true, trail:[],
+    };
+    computePrediction(f);
+    G.asteroids.push(f);
+  }
+  log(`<b>${parent.name} SHATTERED</b> — rubble pile broke into ${n} fragments. Now tracking all of them.`, 'l-bad');
+}
+function removeAst(id){
+  G.asteroids = G.asteroids.filter(a=>a.id!==id);
+  G.interceptors = G.interceptors.filter(i=>i.targetId!==id);
+  if(G.selId===id) G.selId=null;
+}
+function impact(a){
+  const dmg = Math.min(46, Math.max(2, Math.pow(a.size/60,2)*4));
+  G.health = Math.max(0, G.health - dmg);
+  G.impacts++;
+  G.shake = 16;
+  sfx.impact();
+  const [ex,ey]=earthPos(G.t);
+  burst(ex,ey,'#ff7a4a',40,.5); burst(ex,ey,'#ffd27a',24,.3);
+  log(`<b>IMPACT — ${a.name}</b> struck Earth. Habitability −${dmg.toFixed(0)}%.`, 'l-bad');
+  removeAst(a.id);
+  if(G.health<=0) gameOver();
+}
+function savedPass(a){
+  const bounty = Math.round(70 + a.size*.9);
+  G.budget += bounty; G.saved++;
+  sfx.save();
+  log(`<b>${a.name}</b> passed Earth safely (miss: ${(a.closestD/LD).toFixed(1)} LD). +$${bounty}M funding.`, 'l-good');
+  removeAst(a.id);
+}
+
+/* ---------- main sim ---------- */
+function simulate(dtYears){
+  let remaining = dtYears;
+  while(remaining > 1e-9){
+    const dt = Math.min(SIM_DT, remaining);
+    remaining -= dt;
+    G.t += dt;
+    const [ex,ey]=earthPos(G.t);
+
+    for(const a of G.asteroids){
+      if(a.tractorA>0){
+        const sp=Math.hypot(a.vx,a.vy)||1;
+        step(a, dt, [a.tractorSign*a.tractorA*a.vx/sp, a.tractorSign*a.tractorA*a.vy/sp]);
+      } else step(a, dt, null);
+    }
+    for(const it of G.interceptors){
+      const tgt = G.asteroids.find(a=>a.id===it.targetId);
+      if(!tgt){ it.dead=true; continue; }
+      const dx=tgt.x-it.x, dy=tgt.y-it.y, d=Math.hypot(dx,dy);
+      const mv=it.speed*dt;
+      if(d<=mv+.004){ it.dead=true; resolveInterceptorArrival(it,tgt); }
+      else { it.x+=dx/d*mv; it.y+=dy/d*mv; }
+    }
+    G.interceptors = G.interceptors.filter(i=>!i.dead);
+
+    for(const a of [...G.asteroids]){
+      const d=Math.hypot(a.x-ex, a.y-ey);
+      if(d < R_COLLIDE) impact(a);
+      else if(G.t > a.closestT + .02 && d > R_COLLIDE*2.2){
+        // passed the predicted closest approach without hitting; re-predict to
+        // catch multi-rev orbits that swing back for another Earth encounter
+        computePrediction(a);
+        if(G.t > a.closestT + .02 || a.closestD > R_COLLIDE) savedPass(a);
+      }
+    }
+  }
+  // budget drip + spawner
+  G.budget += 165*dtYears;
+  G.nextSpawn -= dtYears;
+  if(G.nextSpawn<=0 && G.asteroids.length<9){
+    spawnAsteroid();
+    G.nextSpawn = Math.max(.16, rand(.42,.62) - G.t*.028);
+  }
+  // refresh predictions (cheap; staggered)
+  for(const a of G.asteroids){
+    a.predTimer += dtYears;
+    if(a.predDirty || (a.tractorA>0 && a.predTimer>.04) || a.predTimer>.3) computePrediction(a);
+  }
+}
+
+function gameOver(){
+  G.over=true; G.running=false;
+  document.getElementById('goText').textContent =
+    `Earth's habitability collapsed after ${G.impacts} impact${G.impacts!==1?'s':''}. `+
+    `The survivors name the crater after you. It is not a compliment.`;
+  document.getElementById('goScore').textContent =
+    `Asteroids deflected: ${G.saved} · Years defended: ${G.t.toFixed(1)}`;
+  document.getElementById('gameover').style.display='flex';
+}
+
+/* ---------- rendering ---------- */
+const stars=[]; for(let i=0;i<240;i++) stars.push([Math.random(),Math.random(),Math.random()]);
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if(G.shake>0){ ctx.translate(rand(-G.shake,G.shake), rand(-G.shake,G.shake)); G.shake*=.86; if(G.shake<.4)G.shake=0; }
+
+  // stars
+  for(const s of stars){
+    ctx.globalAlpha=.25+.5*s[2];
+    ctx.fillStyle='#cfd8ee';
+    ctx.fillRect(s[0]*W, s[1]*H, s[2]>.8?2:1, s[2]>.8?2:1);
+  }
+  ctx.globalAlpha=1;
+
+  // sun
+  const grad=ctx.createRadialGradient(sx(0),sy(0),2,sx(0),sy(0),34);
+  grad.addColorStop(0,'#fff6d8'); grad.addColorStop(.3,'#ffd76a'); grad.addColorStop(1,'#ffd76a00');
+  ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(sx(0),sy(0),34,0,7); ctx.fill();
+  ctx.fillStyle='#ffefb0'; ctx.beginPath(); ctx.arc(sx(0),sy(0),9,0,7); ctx.fill();
+
+  // Earth's orbit
+  ctx.strokeStyle='#24344f'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(sx(0),sy(0),SCALE,0,7); ctx.stroke();
+
+  // Earth + safety radius
+  const [ex,ey]=earthPos(G.t);
+  ctx.strokeStyle='#2c5b8f55'; ctx.setLineDash([3,4]);
+  ctx.beginPath(); ctx.arc(sx(ex),sy(ey),R_COLLIDE*SCALE,0,7); ctx.stroke();
+  ctx.setLineDash([]);
+  const eg=ctx.createRadialGradient(sx(ex)-2,sy(ey)-2,1,sx(ex),sy(ey),8);
+  eg.addColorStop(0,'#8fd0ff'); eg.addColorStop(.6,'#2f7ac9'); eg.addColorStop(1,'#173e6e');
+  ctx.fillStyle=eg; ctx.beginPath(); ctx.arc(sx(ex),sy(ey),7,0,7); ctx.fill();
+
+  // asteroids + predicted paths
+  for(const a of G.asteroids){
+    const sel = a.id===G.selId;
+    const status = a.closestD < R_COLLIDE ? (a.deflected?'def':'hit') : 'miss';
+    const pcol = status==='hit' ? '#ff5a5a' : status==='def' ? '#ffb84d' : '#5dde8f';
+    if(a.pred && a.pred.length>4){
+      ctx.strokeStyle=pcol; ctx.globalAlpha= sel? .85 : .38; ctx.lineWidth= sel?1.6:1;
+      ctx.beginPath(); ctx.moveTo(sx(a.x),sy(a.y));
+      for(let i=0;i<a.pred.length;i+=2) ctx.lineTo(sx(a.pred[i]),sy(a.pred[i+1]));
+      ctx.stroke(); ctx.globalAlpha=1;
+    }
+    // trail
+    a.trail.push(a.x,a.y); if(a.trail.length>36) a.trail.splice(0,2);
+    ctx.strokeStyle=TYPES[a.type].color; ctx.globalAlpha=.3; ctx.lineWidth=1;
+    ctx.beginPath();
+    for(let i=0;i<a.trail.length;i+=2){ i? ctx.lineTo(sx(a.trail[i]),sy(a.trail[i+1])) : ctx.moveTo(sx(a.trail[0]),sy(a.trail[1])); }
+    ctx.stroke(); ctx.globalAlpha=1;
+
+    const r = 3 + a.size/60;
+    const onX = sx(a.x), onY = sy(a.y);
+    const off = onX<0||onX>W-320||onY<0||onY>H;
+    if(!off){
+      ctx.fillStyle=TYPES[a.type].color;
+      ctx.beginPath(); ctx.arc(onX,onY,r,0,7); ctx.fill();
+      if(a.tractorA>0){ ctx.strokeStyle='#b48aff'; ctx.beginPath(); ctx.arc(onX,onY,r+4,0,7); ctx.stroke(); }
+      if(sel){
+        ctx.strokeStyle='#5aa2ff'; ctx.lineWidth=1.5;
+        ctx.beginPath(); ctx.arc(onX,onY,r+7,0,7); ctx.stroke();
+      }
+      ctx.fillStyle=pcol; ctx.font='10px sans-serif';
+      ctx.fillText(a.name, onX+r+5, onY+3);
+    } else {
+      // edge indicator arrow
+      const ang=Math.atan2(sy(a.y)-CY, sx(a.x)-CX);
+      const px=CX+Math.cos(ang)*(Math.min(CX,CY)-18), py=CY+Math.sin(ang)*(Math.min(CX,CY)-18);
+      ctx.save(); ctx.translate(px,py); ctx.rotate(ang);
+      ctx.fillStyle=pcol;
+      ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-4,-5); ctx.lineTo(-4,5); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // interceptors
+  for(const it of G.interceptors){
+    const tgt=G.asteroids.find(a=>a.id===it.targetId); if(!tgt) continue;
+    const ang=Math.atan2(tgt.y-it.y, tgt.x-it.x);
+    ctx.save(); ctx.translate(sx(it.x),sy(it.y)); ctx.rotate(ang);
+    ctx.fillStyle = it.type==='nuke' ? '#ff9a5a' : it.type==='tractor' ? '#b48aff' : '#7ec8ff';
+    ctx.beginPath(); ctx.moveTo(6,0); ctx.lineTo(-4,-3.4); ctx.lineTo(-4,3.4); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle='#7ec8ff33'; ctx.beginPath();
+    ctx.moveTo(sx(it.x),sy(it.y)); ctx.lineTo(sx(tgt.x),sy(tgt.y)); ctx.stroke();
+  }
+
+  // particles
+  for(const p of G.particles){
+    p.x+=p.vx*.016; p.y+=p.vy*.016; p.life-=.03;
+    ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.color;
+    ctx.fillRect(sx(p.x)-1.5, sy(p.y)-1.5, 3,3);
+  }
+  ctx.globalAlpha=1;
+  G.particles=G.particles.filter(p=>p.life>0);
+  ctx.restore();
+}
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+function fmtT(yr){
+  if(yr<0) yr=0;
+  const m = yr*12;
+  return m>=12 ? `${(m/12).toFixed(1)} yr` : `${m.toFixed(1)} mo`;
+}
+function getSel(){ return G.asteroids.find(a=>a.id===G.selId); }
+
+function log(html, cls){
+  const d=document.createElement('div'); d.className=cls||''; d.innerHTML=html;
+  const l=$('log'); l.prepend(d);
+  while(l.children.length>40) l.lastChild.remove();
+}
+
+function updateHUD(){
+  $('uiBudget').textContent = '$'+Math.floor(G.budget)+'M';
+  $('uiYear').textContent = (EPOCH+G.t).toFixed(1);
+  $('uiSaved').textContent = G.saved;
+  const hb=$('healthbar'); hb.style.width=G.health+'%';
+  hb.style.background = G.health>55 ? 'linear-gradient(90deg,#3ecf74,#7be29a)'
+    : G.health>28 ? 'linear-gradient(90deg,#e8b93e,#f5d67a)' : 'linear-gradient(90deg,#e04747,#ff8a6a)';
+}
+
+function updateThreatList(){
+  const el=$('threatlist');
+  const rows=[...G.asteroids].sort((a,b)=>a.closestT-b.closestT);
+  el.innerHTML='';
+  if(!rows.length){ el.innerHTML='<div style="color:var(--dim);font-size:12px;padding:6px">Skies clear… for now.</div>'; return; }
+  for(const a of rows){
+    const hit = a.closestD < R_COLLIDE;
+    const stCls = hit ? (a.deflected?'st-def':'st-hit') : 'st-miss';
+    const stTxt = hit ? (a.deflected?'INBOUND*':'INBOUND') : 'WILL MISS';
+    const d=document.createElement('div');
+    d.className='trow'+(a.id===G.selId?' sel':'');
+    d.innerHTML=`<span class="dot" style="background:${TYPES[a.type].color}"></span>
+      <span class="nm">${a.name}</span><span class="tt">${Math.round(a.size)} m</span>
+      <span class="eta ${stCls}">${stTxt} · ${fmtT(a.closestT-G.t)}</span>`;
+    d.onclick=()=>{ G.selId=a.id; sfx.select(); updateSelPanel(); };
+    el.appendChild(d);
+  }
+}
+
+function updateSelPanel(){
+  const el=$('selpanel'), a=getSel();
+  if(!a){ el.innerHTML='<span style="color:var(--dim)">Click an asteroid to plan a deflection mission.</span>'; return; }
+  const hit = a.closestD < R_COLLIDE;
+  const missTxt = hit
+    ? `<span class="st-hit">IMPACT in ${fmtT(a.closestT-G.t)}</span>`
+    : `<span class="st-miss">MISS by ${(a.closestD/LD).toFixed(1)} LD</span>`;
+  let html = `
+    <div class="big" style="color:${TYPES[a.type].color}">${a.name}</div>
+    <div class="row"><span>Class</span><b>${TYPES[a.type].label}</b></div>
+    <div class="row"><span>Diameter</span><b>${Math.round(a.size)} m</b></div>
+    <div class="row"><span>Rel. mass</span><b>${massFactor(a).toFixed(2)}×</b></div>
+    <div class="row"><span>Status</span><b>${missTxt}</b></div>
+    ${a.tractorA>0?'<div class="row"><span>Tractor</span><b style="color:var(--violet)">pulling…</b></div>':''}
+    <div style="border-top:1px solid var(--line); margin:9px 0 2px"></div>`;
+  for(const k of ['kinetic','tractor','nuke']){
+    const w=WEAPONS[k], f=forecast(a,k);
+    const eta = f.tHit ? fmtT(f.tHit-G.t) : '—';
+    let extra='';
+    if(k==='kinetic' && a.type==='rubble') extra=' <span class="warn">(−40% on rubble)</span>';
+    if(k==='nuke' && a.type==='rubble') extra=' <span class="warn">(45% shatter risk!)</span>';
+    html += `<button class="wbtn" data-w="${k}" ${G.budget<w.cost?'disabled':''}>
+      <span class="t1"><span>${w.name}</span><span>$${w.cost}M</span></span>
+      <span class="t2">${w.desc}${extra}</span>
+      <span class="t2">ETA ${eta} · forecast: <span class="eff-${f.rating}">${f.rating}</span>${f.tHit?` (miss ~${(f.miss/LD).toFixed(1)} LD)`:''} · ${Math.round(w.fail*100)}% mission risk</span>
+    </button>`;
+  }
+  el.innerHTML=html;
+  el.querySelectorAll('.wbtn').forEach(b=>b.onclick=()=>launch(b.dataset.w));
+}
+
+/* click-to-select on canvas */
+cv.addEventListener('pointerdown', e=>{
+  if(!G.running) return;
+  let best=null, bestD=18;
+  for(const a of G.asteroids){
+    const d=Math.hypot(sx(a.x)-e.clientX, sy(a.y)-e.clientY);
+    if(d<bestD){ bestD=d; best=a; }
+  }
+  if(best){ G.selId=best.id; sfx.select(); updateSelPanel(); }
+});
+
+/* time controls */
+function setSpeed(s){
+  G.paused = (s===0);
+  if(s>0) G.speed=s;
+  $('btnPause').classList.toggle('active', s===0);
+  $('btnPlay').classList.toggle('active', s===1);
+  $('btnFast').classList.toggle('active', s===4);
+}
+$('btnPause').onclick=()=>setSpeed(0);
+$('btnPlay').onclick=()=>setSpeed(1);
+$('btnFast').onclick=()=>setSpeed(4);
+addEventListener('keydown', e=>{
+  if(e.code==='Space'){ e.preventDefault(); G.paused ? setSpeed(G.speed) : setSpeed(0); }
+  if(e.key==='1') setSpeed(1);
+  if(e.key==='2') setSpeed(4);
+});
+
+$('btnStart').onclick=()=>{
+  audioInit();
+  $('title').style.display='none';
+  G.running=true;
+  log('Planetary Defense Office online. Budget replenishes over time; deflections earn bounties.');
+};
+$('btnRestart').onclick=()=>{
+  $('gameover').style.display='none';
+  newGame(); G.running=true;
+  log('New timeline. Try to keep this one habitable.');
+};
+
+/* ---------- main loop ---------- */
+let last=performance.now(), uiT=0;
+function frame(now){
+  const dtReal=Math.min(.05,(now-last)/1000); last=now;
+  if(G.running && !G.paused && !G.over){
+    simulate(dtReal*YEAR_PER_SEC*G.speed);
+  }
+  draw();
+  uiT+=dtReal;
+  if(uiT>.2){ uiT=0; updateHUD(); updateThreatList();
+    if(getSel()) updateSelPanel(); else if(G.selId===null && document.querySelector('#selpanel .big')) updateSelPanel();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
